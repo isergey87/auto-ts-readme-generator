@@ -4,9 +4,9 @@
 var yargs = require('yargs/yargs');
 var fs = require('fs');
 var path = require('path');
+var glob = require('glob');
 var replaceInFile = require('replace-in-file');
 var ts = require('typescript');
-var glob = require('glob');
 
 function _classCallCheck(instance, Constructor) {
   if (!(instance instanceof Constructor)) {
@@ -410,7 +410,7 @@ var TsFileExportDocumentation = /*#__PURE__*/function () {
   return TsFileExportDocumentation;
 }();
 
-var mdSpecial = /([\\`*_{}[\]#+\-.!])/g;
+var mdSpecial = /([\\`*_{}[\]#+\-.!|])/g;
 var escapeMd = function escapeMd(src) {
   if (src) {
     return src.replaceAll(mdSpecial, '\\$1');

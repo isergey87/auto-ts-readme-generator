@@ -7,7 +7,7 @@ import {replaceInFileSync} from 'replace-in-file'
 import {getTsConfig} from './utils/get-ts-config'
 import {DocEntry, TsFileExportDocumentation} from './ts-file-export-documentation'
 
-const mdSpecial = /([\\`*_{}[\]#+\-.!])/g
+const mdSpecial = /([\\`*_{}[\]#+\-.!|])/g
 const escapeMd = (src: string | undefined) => {
   if (src) {
     return src.replaceAll(mdSpecial, '\\$1')
