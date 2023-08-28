@@ -1,12 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 
+import {globSync} from 'glob'
 import {replaceInFileSync} from 'replace-in-file'
 
 import {getTsConfig} from './utils/get-ts-config'
 import {DocEntry, TsFileExportDocumentation} from './ts-file-export-documentation'
 
-const mdSpecial = /([\\`*_{}[\]()#+\-.!])/g
+const mdSpecial = /([\\`*_{}[\]#+\-.!])/g
 const escapeMd = (src: string | undefined) => {
   if (src) {
     return src.replaceAll(mdSpecial, '\\$1')
@@ -23,14 +24,14 @@ export const generate = (
   try {
     const config = getTsConfig(configPath)
     let result = ''
+    const listOfFiles = globSync(files.map((f) => f.toString()))
 
-    for (const file of files) {
-      if (typeof file === 'string') {
-        const link = escapeMd(path.relative('.', file))
-
+    for (const file of listOfFiles) {
+      const link = escapeMd(path.relative('.', file))
+      const tsFileExport = new TsFileExportDocumentation(file, config)
+      const documentations = tsFileExport.extractDocumentation()
+      if (documentations.length) {
         result += `[${link}](${link})\n\n`
-        const tsFileExport = new TsFileExportDocumentation(file, config)
-        const documentations = tsFileExport.extractDocumentation()
         result += documentations.map((doc) => docEntryToMd(doc)).join('\n\n')
       }
     }
@@ -54,14 +55,16 @@ function docEntryToMd(docEntry: DocEntry): string {
   }
   if (docEntry.constructors && docEntry.constructors.length) {
     result += generateTable('Constructors')
-    result += docEntry.constructors.map((doc) => docEntryToTable(doc)).join('\n\n')
+    result += docEntry.constructors.map((doc) => docEntryToTable(doc)).join('\n')
+    result += '\n\n'
   }
   if (docEntry.parameters && docEntry.parameters.length) {
     result += generateTable('Parameters')
-    result += docEntry.parameters.map((doc) => docEntryToTable(doc)).join('\n\n')
+    result += docEntry.parameters.map((doc) => docEntryToTable(doc)).join('\n')
+    result += '\n\n'
   }
   if (docEntry.calls && docEntry.calls.length) {
-    result += generateTable('Calls')
+    result += generateTable('Parameters')
     result += docEntry.calls
       .map((doc) => {
         if (doc.parameters) {
@@ -70,6 +73,7 @@ function docEntryToMd(docEntry: DocEntry): string {
         return ''
       })
       .join('\n')
+    result += '\n\n'
   }
   if (docEntry.returnType) {
     result += `#### Return\n\n${escapeMd(docEntry.returnType)}`
@@ -88,6 +92,9 @@ function docEntryToTable(docEntry: DocEntry): string {
 }
 
 function writeToOutput(result: string, outputPath: string, section: string) {
+  if (!result) {
+    return
+  }
   const sectionName = `# ${section}`
   const commonResult = `${sectionName}\n${result}\n\n`
   const regexp = new RegExp(`(# ${section}.*# )|(# ${section}.*$)`, 'gs')

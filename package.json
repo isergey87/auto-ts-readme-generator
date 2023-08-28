@@ -90,6 +90,7 @@
     "jsxSingleQuote": true
   },
   "dependencies": {
+    "glob": "^10.3.3",
     "replace-in-file": "^7.0.1",
     "yargs": "^17.7.2"
   },

@@ -6,6 +6,7 @@ var fs = require('fs');
 var path = require('path');
 var replaceInFile = require('replace-in-file');
 var ts = require('typescript');
+var glob = require('glob');
 
 function _classCallCheck(instance, Constructor) {
   if (!(instance instanceof Constructor)) {
@@ -409,7 +410,7 @@ var TsFileExportDocumentation = /*#__PURE__*/function () {
   return TsFileExportDocumentation;
 }();
 
-var mdSpecial = /([\\`*_{}[\]()#+\-.!])/g;
+var mdSpecial = /([\\`*_{}[\]#+\-.!])/g;
 var escapeMd = function escapeMd(src) {
   if (src) {
     return src.replaceAll(mdSpecial, '\\$1');
@@ -420,16 +421,19 @@ var generate = function generate(files, configPath, outputPath, section) {
   try {
     var config = getTsConfig(configPath);
     var result = '';
-    var _iterator = _createForOfIteratorHelper(files),
+    var listOfFiles = glob.globSync(files.map(function (f) {
+      return f.toString();
+    }));
+    var _iterator = _createForOfIteratorHelper(listOfFiles),
       _step;
     try {
       for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var file = _step.value;
-        if (typeof file === 'string') {
-          var link = escapeMd(path.relative('.', file));
+        var link = escapeMd(path.relative('.', file));
+        var tsFileExport = new TsFileExportDocumentation(file, config);
+        var documentations = tsFileExport.extractDocumentation();
+        if (documentations.length) {
           result += "[".concat(link, "](").concat(link, ")\n\n");
-          var tsFileExport = new TsFileExportDocumentation(file, config);
-          var documentations = tsFileExport.extractDocumentation();
           result += documentations.map(function (doc) {
             return docEntryToMd(doc);
           }).join('\n\n');
@@ -461,22 +465,25 @@ function docEntryToMd(docEntry) {
     result += generateTable('Constructors');
     result += docEntry.constructors.map(function (doc) {
       return docEntryToTable(doc);
-    }).join('\n\n');
+    }).join('\n');
+    result += '\n\n';
   }
   if (docEntry.parameters && docEntry.parameters.length) {
     result += generateTable('Parameters');
     result += docEntry.parameters.map(function (doc) {
       return docEntryToTable(doc);
-    }).join('\n\n');
+    }).join('\n');
+    result += '\n\n';
   }
   if (docEntry.calls && docEntry.calls.length) {
-    result += generateTable('Calls');
+    result += generateTable('Parameters');
     result += docEntry.calls.map(function (doc) {
       if (doc.parameters) {
         return doc.parameters.map(docEntryToTable).join('\n');
       }
       return '';
     }).join('\n');
+    result += '\n\n';
   }
   if (docEntry.returnType) {
     result += "#### Return\n\n".concat(escapeMd(docEntry.returnType));
@@ -490,6 +497,9 @@ function docEntryToTable(docEntry) {
   return "| **".concat(escapeMd(docEntry.name), "** | ").concat(escapeMd(docEntry.type), " | ").concat(escapeMd(docEntry.documentation), " |");
 }
 function writeToOutput(result, outputPath, section) {
+  if (!result) {
+    return;
+  }
   var sectionName = "# ".concat(section);
   var commonResult = "".concat(sectionName, "\n").concat(result, "\n\n");
   var regexp = new RegExp("(# ".concat(section, ".*# )|(# ").concat(section, ".*$)"), 'gs');
