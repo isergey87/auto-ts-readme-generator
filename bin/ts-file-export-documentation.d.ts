@@ -1,11 +1,11 @@
 import { CompilerOptions } from 'typescript';
-interface DocEntry {
+export interface DocEntry {
     name?: string;
-    fileName?: string;
     documentation?: string;
     type?: string;
     constructors?: DocEntry[];
     parameters?: DocEntry[];
+    calls?: DocEntry[];
     returnType?: string;
 }
 export declare class TsFileExportDocumentation {
@@ -31,4 +31,3 @@ export declare class TsFileExportDocumentation {
     private addNodeDeclaration;
     private parseImportDeclaration;
 }
-export {};

@@ -11,7 +11,7 @@ export default {
   external: [/^yargs/, 'typescript', 'fs', 'path'],
   plugins: [
     typescript({
-      exclude: '**/__test__/**/*',
+      exclude: '**/__tests__/**/*',
     }),
     babel({
       extensions: ['.js', '.jsx', '.ts', '.tsx'],

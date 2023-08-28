@@ -3,9 +3,41 @@
 
 var yargs = require('yargs/yargs');
 var fs = require('fs');
-var ts = require('typescript');
 var path = require('path');
+var replaceInFile = require('replace-in-file');
+var ts = require('typescript');
 
+function _classCallCheck(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+}
+function _defineProperties(target, props) {
+  for (var i = 0; i < props.length; i++) {
+    var descriptor = props[i];
+    descriptor.enumerable = descriptor.enumerable || false;
+    descriptor.configurable = true;
+    if ("value" in descriptor) descriptor.writable = true;
+    Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor);
+  }
+}
+function _createClass(Constructor, protoProps, staticProps) {
+  if (protoProps) _defineProperties(Constructor.prototype, protoProps);
+  if (staticProps) _defineProperties(Constructor, staticProps);
+  Object.defineProperty(Constructor, "prototype", {
+    writable: false
+  });
+  return Constructor;
+}
+function _toConsumableArray(arr) {
+  return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
+}
+function _arrayWithoutHoles(arr) {
+  if (Array.isArray(arr)) return _arrayLikeToArray(arr);
+}
+function _iterableToArray(iter) {
+  if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter);
+}
 function _unsupportedIterableToArray(o, minLen) {
   if (!o) return;
   if (typeof o === "string") return _arrayLikeToArray(o, minLen);
@@ -18,6 +50,9 @@ function _arrayLikeToArray(arr, len) {
   if (len == null || len > arr.length) len = arr.length;
   for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
   return arr2;
+}
+function _nonIterableSpread() {
+  throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
 function _createForOfIteratorHelper(o, allowArrayLike) {
   var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
@@ -70,6 +105,20 @@ function _createForOfIteratorHelper(o, allowArrayLike) {
     }
   };
 }
+function _toPrimitive(input, hint) {
+  if (typeof input !== "object" || input === null) return input;
+  var prim = input[Symbol.toPrimitive];
+  if (prim !== undefined) {
+    var res = prim.call(input, hint || "default");
+    if (typeof res !== "object") return res;
+    throw new TypeError("@@toPrimitive must return a primitive value.");
+  }
+  return (hint === "string" ? String : Number)(input);
+}
+function _toPropertyKey(arg) {
+  var key = _toPrimitive(arg, "string");
+  return typeof key === "symbol" ? key : String(key);
+}
 
 var parseModuleResolution = function parseModuleResolution(options) {
   if (options != null && 'moduleResolution' in options) {
@@ -121,8 +170,10 @@ var getTsConfig = function getTsConfig(configPath) {
 };
 
 var forEachVariableStatement = function forEachVariableStatement(node, callback) {
-  ts.forEachChild(node, function (childNode) {
-    ts.forEachChild(childNode, callback);
+  ts.forEachChild(node.declarationList, function (childNode) {
+    if (ts.isVariableDeclaration(childNode)) {
+      callback(childNode);
+    }
   });
 };
 
@@ -130,135 +181,238 @@ var isNodeExported = function isNodeExported(node) {
   return (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0;
 };
 
-var tsExportDocumentation = function tsExportDocumentation(file, config) {
-  var documentations = [];
-  var program = ts.createProgram([file], config);
-  var allExports = new Map();
-  var importRenames = new Map();
-  var exportPoints = [file];
-  var checker = program.getTypeChecker();
-  var _iterator = _createForOfIteratorHelper(program.getSourceFiles()),
-    _step;
-  try {
-    for (_iterator.s(); !(_step = _iterator.n()).done;) {
-      var sourceFile = _step.value;
-      if (!sourceFile.isDeclarationFile) {
-        ts.forEachChild(sourceFile, function (node) {
-          completeAllExports(node, allExports, checker);
-        });
+var TsFileExportDocumentation = /*#__PURE__*/function () {
+  function TsFileExportDocumentation(file, config) {
+    _classCallCheck(this, TsFileExportDocumentation);
+    this.allExports = new Map();
+    this.importRenames = new Map();
+    this.documentation = [];
+    this.exportSourceFiles = [];
+    this.file = file;
+    this.program = ts.createProgram([file], config);
+    this.checker = this.program.getTypeChecker();
+  }
+  _createClass(TsFileExportDocumentation, [{
+    key: "extractDocumentation",
+    value: function extractDocumentation() {
+      this.allExports.clear();
+      this.importRenames.clear();
+      this.exportSourceFiles = [this.program.getSourceFile(this.file)];
+      this.documentation = [];
+      this.collectAllExports();
+      this.getDocumentationFromExportPoints();
+      return this.documentation;
+    }
+  }, {
+    key: "collectAllExports",
+    value: function collectAllExports() {
+      var _this = this;
+      var _iterator = _createForOfIteratorHelper(this.program.getSourceFiles()),
+        _step;
+      try {
+        for (_iterator.s(); !(_step = _iterator.n()).done;) {
+          var sourceFile = _step.value;
+          if (!sourceFile.isDeclarationFile) {
+            ts.forEachChild(sourceFile, function (node) {
+              _this.collectNodeExports(node);
+            });
+          }
+        }
+      } catch (err) {
+        _iterator.e(err);
+      } finally {
+        _iterator.f();
       }
     }
-  } catch (err) {
-    _iterator.e(err);
-  } finally {
-    _iterator.f();
-  }
-  var _loop = function _loop() {
-    var file = _exportPoints[_i];
-    var sourceFile = program.getSourceFile(file);
-    if (sourceFile && !sourceFile.isDeclarationFile) {
-      ts.forEachChild(sourceFile, function (childNode) {
-        documentFromExportPoint(childNode, allExports, importRenames, file, exportPoints, checker, documentations);
+  }, {
+    key: "getDocumentationFromExportPoints",
+    value: function getDocumentationFromExportPoints() {
+      var _this2 = this;
+      var _iterator2 = _createForOfIteratorHelper(this.exportSourceFiles),
+        _step2;
+      try {
+        for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+          var sourceFile = _step2.value;
+          if (sourceFile && !sourceFile.isDeclarationFile) {
+            ts.forEachChild(sourceFile, function (childNode) {
+              _this2.getNodeDocumentation(childNode);
+            });
+          }
+        }
+      } catch (err) {
+        _iterator2.e(err);
+      } finally {
+        _iterator2.f();
+      }
+    }
+  }, {
+    key: "collectNodeExports",
+    value: function collectNodeExports(node) {
+      var _this3 = this;
+      if (isNodeExported(node)) {
+        if ((ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node)) && node.name) {
+          // This is a top level class, get its symbol
+          this.addExport(node.name);
+          // No need to walk any further, class expressions/inner declarations
+          // cannot be exported
+        } else if (ts.isModuleDeclaration(node)) {
+          // This is a namespace, visit its children
+          ts.forEachChild(node, function (childNode) {
+            return _this3.collectNodeExports(childNode);
+          });
+        } else if (ts.isVariableStatement(node)) {
+          forEachVariableStatement(node, function (childNode) {
+            return _this3.addExport(childNode.name);
+          });
+        }
+      }
+    }
+  }, {
+    key: "addExport",
+    value: function addExport(node) {
+      var symbol = this.checker.getSymbolAtLocation(node);
+      if (symbol) {
+        this.allExports.set(symbol.getEscapedName(), this.serializeClass(symbol));
+      }
+    }
+  }, {
+    key: "serializeClass",
+    value: function serializeClass(symbol) {
+      var _this4 = this;
+      var details = this.serializeSymbol(symbol);
+      // Get the construct signatures
+      var constructorType = this.checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
+      details.constructors = constructorType.getConstructSignatures().map(function (signature) {
+        return _this4.serializeSignature(signature);
+      });
+      details.calls = constructorType.getCallSignatures().map(function (signature) {
+        return _this4.serializeSignature(signature);
+      });
+      return details;
+    }
+  }, {
+    key: "serializeSignature",
+    value: function serializeSignature(signature) {
+      var _this5 = this;
+      return {
+        parameters: signature.parameters.map(function (symbol) {
+          return _this5.serializeSymbol(symbol);
+        }),
+        returnType: this.checker.typeToString(signature.getReturnType()),
+        documentation: ts.displayPartsToString(signature.getDocumentationComment(this.checker))
+      };
+    }
+  }, {
+    key: "serializeSymbol",
+    value: function serializeSymbol(symbol) {
+      return {
+        name: symbol.getName(),
+        documentation: ts.displayPartsToString(symbol.getDocumentationComment(this.checker)),
+        type: this.checker.typeToString(this.checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration))
+      };
+    }
+  }, {
+    key: "getNodeDocumentation",
+    value: function getNodeDocumentation(node) {
+      var _this6 = this;
+      if (ts.isExportDeclaration(node)) {
+        if (node.exportClause) {
+          this.parseExportDeclaration(node.exportClause);
+        } else if (node.moduleSpecifier) {
+          var _this$exportSourceFil;
+          var symbol = this.checker.getSymbolAtLocation(node.moduleSpecifier);
+          (_this$exportSourceFil = this.exportSourceFiles).push.apply(_this$exportSourceFil, _toConsumableArray((symbol === null || symbol === void 0 ? void 0 : symbol.getDeclarations()) || []));
+        }
+      } else if (ts.isImportDeclaration(node)) {
+        this.parseImportDeclaration(node.importClause);
+      } else if (isNodeExported(node)) {
+        if (ts.isModuleDeclaration(node)) {
+          // This is a namespace, visit its children
+          ts.forEachChild(node, function (childNode) {
+            _this6.getNodeDocumentation(childNode);
+          });
+        } else if (ts.isVariableStatement(node)) {
+          forEachVariableStatement(node, function (childNode) {
+            return _this6.addNodeDeclaration(childNode.name);
+          });
+        } else if ((ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node)) && node.name) {
+          this.addNodeDeclaration(node.name);
+        }
+      }
+    }
+  }, {
+    key: "parseExportDeclaration",
+    value: function parseExportDeclaration(parentNode) {
+      var _this7 = this;
+      ts.forEachChild(parentNode, function (node) {
+        if (ts.isExportSpecifier(node) && node.name) {
+          var symbol = _this7.checker.getSymbolAtLocation(node.name);
+          var declaration;
+          //was renamed
+          if (node.propertyName) {
+            var originalSymbol = _this7.checker.getSymbolAtLocation(node.propertyName);
+            declaration = _this7.findSymbolDeclaration(originalSymbol);
+          } else {
+            declaration = _this7.findSymbolDeclaration(symbol);
+          }
+          if (declaration) {
+            declaration.name = (symbol === null || symbol === void 0 ? void 0 : symbol.getName()) || '';
+            _this7.documentation.push(declaration);
+          }
+        }
       });
     }
-  };
-  for (var _i = 0, _exportPoints = exportPoints; _i < _exportPoints.length; _i++) {
-    _loop();
-  }
-  return documentations;
-};
-var completeAllExports = function completeAllExports(node, allExports, checker) {
-  if (!isNodeExported(node)) {
-    return;
-  }
-  if (ts.isClassDeclaration(node) && node.name) {
-    // This is a top level class, get its symbol
-    var symbol = checker.getSymbolAtLocation(node.name);
-    if (symbol) {
-      allExports.set(symbol.getEscapedName(), serializeClass(symbol, checker));
-    }
-    // No need to walk any further, class expressions/inner declarations
-    // cannot be exported
-  } else if (ts.isModuleDeclaration(node)) {
-    // This is a namespace, visit its children
-    ts.forEachChild(node, function (childNode) {
-      return completeAllExports(childNode, allExports, checker);
-    });
-  } else if (ts.isVariableStatement(node)) {
-    forEachVariableStatement(node, function (variableNode) {
-      var symbol = checker.getSymbolAtLocation(variableNode);
-      if (symbol) {
-        allExports.set(symbol.getEscapedName(), serializeClass(symbol, checker));
+  }, {
+    key: "findSymbolDeclaration",
+    value: function findSymbolDeclaration(symbol) {
+      if (!symbol) {
+        return;
       }
-    });
-  }
-};
-/** Serialize a symbol into a json object */
-var serializeSymbol = function serializeSymbol(symbol, checker) {
-  return {
-    name: symbol.getName(),
-    documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker)),
-    type: checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration))
-  };
-};
-var serializeClass = function serializeClass(symbol, checker) {
-  var details = serializeSymbol(symbol, checker);
-  // Get the construct signatures
-  var constructorType = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
-  details.constructors = constructorType.getConstructSignatures().map(function (signature) {
-    return serializeSignature(signature, checker);
-  });
-  return details;
-};
-/** Serialize a signature (call or construct) */
-var serializeSignature = function serializeSignature(signature, checker) {
-  return {
-    parameters: signature.parameters.map(function (symbol) {
-      return serializeSymbol(symbol, checker);
-    }),
-    returnType: checker.typeToString(signature.getReturnType()),
-    documentation: ts.displayPartsToString(signature.getDocumentationComment(checker))
-  };
-};
-var documentFromExportPoint = function documentFromExportPoint(node, allExports, importRenames, rootPath, exportPoints, checker, documentations) {
-  if (ts.isExportDeclaration(node)) {
-    if (node.exportClause) {
-      parseExportDeclaration(node.exportClause, allExports, importRenames, checker, documentations);
-    } else if (node.moduleSpecifier) {
-      exportPoints.push(path.resolve(rootPath, node.moduleSpecifier.getText()));
-    }
-  }
-};
-var findSymbolDeclaration = function findSymbolDeclaration(symbol, allExports, importRenames) {
-  if (!symbol) {
-    return;
-  }
-  var searchName = symbol.getEscapedName();
-  if (importRenames.has(searchName)) {
-    searchName = importRenames.get(searchName);
-  }
-  return allExports.get(searchName);
-};
-var parseExportDeclaration = function parseExportDeclaration(parentNode, allExports, importRenames, checker, documentations) {
-  ts.forEachChild(parentNode, function (node) {
-    if (ts.isExportSpecifier(node) && node.name) {
-      var symbol = checker.getSymbolAtLocation(node.name);
-      var declaration;
-      //was renamed
-      if (node.propertyName) {
-        var originalSymbol = checker.getSymbolAtLocation(node.propertyName);
-        declaration = findSymbolDeclaration(originalSymbol, allExports, importRenames);
-      } else {
-        declaration = findSymbolDeclaration(symbol, allExports, importRenames);
+      var searchName = symbol.getEscapedName();
+      if (this.importRenames.has(searchName)) {
+        searchName = this.importRenames.get(searchName);
       }
+      return this.allExports.get(searchName);
+    }
+  }, {
+    key: "addNodeDeclaration",
+    value: function addNodeDeclaration(node) {
+      var symbol = this.checker.getSymbolAtLocation(node);
+      var declaration = this.findSymbolDeclaration(symbol);
       if (declaration) {
-        declaration.name = (symbol === null || symbol === void 0 ? void 0 : symbol.getName()) || '';
-        documentations.push(declaration);
+        this.documentation.push(declaration);
       }
     }
-  });
-};
+  }, {
+    key: "parseImportDeclaration",
+    value: function parseImportDeclaration(parentNode) {
+      var _this8 = this;
+      if (!parentNode) {
+        return;
+      }
+      ts.forEachChild(parentNode, function (importNode) {
+        if (ts.isNamedImports(importNode)) {
+          ts.forEachChild(importNode, function (node) {
+            if (ts.isImportSpecifier(node) && node.name && node.propertyName) {
+              var fileSymbol = _this8.checker.getSymbolAtLocation(node.name);
+              //was renamed
+              var originalSymbol = _this8.checker.getSymbolAtLocation(node.propertyName);
+              if (fileSymbol && originalSymbol) {
+                _this8.importRenames.set(fileSymbol.getEscapedName(), originalSymbol.getEscapedName());
+              }
+            }
+          });
+        }
+      });
+    }
+  }]);
+  return TsFileExportDocumentation;
+}();
 
+var mdSpecial = /([\\`*_{}[\]()#+\-.!])/g;
+var escapeMd = function escapeMd(src) {
+  return src.replaceAll(mdSpecial, '\\$1');
+};
 var generate = function generate(files, configPath, outputPath, section) {
   try {
     var config = getTsConfig(configPath);
@@ -269,9 +423,13 @@ var generate = function generate(files, configPath, outputPath, section) {
       for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var file = _step.value;
         if (typeof file === 'string') {
-          result += "## ".concat(file);
-          var documentations = tsExportDocumentation(file, config);
-          console.log(documentations);
+          var link = escapeMd(path.relative('.', file));
+          result += "[".concat(link, "](").concat(link, ")\n\n");
+          var tsFileExport = new TsFileExportDocumentation(file, config);
+          var documentations = tsFileExport.extractDocumentation();
+          result += documentations.map(function (doc) {
+            return docEntryToMd(doc);
+          }).join('\n\n');
         }
       }
     } catch (err) {
@@ -279,11 +437,81 @@ var generate = function generate(files, configPath, outputPath, section) {
     } finally {
       _iterator.f();
     }
+    writeToOutput(result, outputPath, section);
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.error(e);
+    console.error('error', e);
   }
 };
+function docEntryToMd(docEntry) {
+  var result = '';
+  if (docEntry.name) {
+    result += "### ".concat(docEntry.name, "\n\n");
+    if (docEntry.type) {
+      result += "type: ".concat(docEntry.type, "\n\n");
+    }
+  }
+  if (docEntry.documentation) {
+    result += "".concat(docEntry.documentation, "\n\n");
+  }
+  if (docEntry.constructors && docEntry.constructors.length) {
+    result += generateTable('Constructors');
+    result += docEntry.constructors.map(function (doc) {
+      return docEntryToTable(doc);
+    }).join('\n\n');
+  }
+  if (docEntry.parameters && docEntry.parameters.length) {
+    result += generateTable('Parameters');
+    result += docEntry.parameters.map(function (doc) {
+      return docEntryToTable(doc);
+    }).join('\n\n');
+  }
+  if (docEntry.calls && docEntry.calls.length) {
+    result += generateTable('Calls');
+    result += docEntry.calls.map(function (doc) {
+      if (doc.parameters) {
+        return doc.parameters.map(docEntryToTable).join('\n');
+      }
+      return '';
+    }).join('\n');
+  }
+  if (docEntry.returnType) {
+    result += "#### Return\n\n".concat(docEntry.returnType);
+  }
+  return result;
+}
+function generateTable(name) {
+  return "#### ".concat(name, ":\n\n| name  |  type  | description |\n|-------|------|-------------|\n");
+}
+function docEntryToTable(docEntry) {
+  return "| **".concat(docEntry.name, "** | ").concat(docEntry.type, " | ").concat(docEntry.documentation, " |");
+}
+function writeToOutput(result, outputPath, section) {
+  var sectionName = "# ".concat(section);
+  var commonResult = "".concat(sectionName, "\n").concat(result, "\n\n");
+  var regexp = new RegExp("(# ".concat(section, ".*# )|(# ").concat(section, ".*$)"), 'gs');
+  var replaceResult = replaceInFile.replaceInFileSync({
+    files: outputPath,
+    from: regexp,
+    to: function to(str) {
+      if (str.endsWith('# ')) {
+        return "".concat(commonResult, "\n# ");
+      } else {
+        return commonResult;
+      }
+    }
+  });
+  if (!replaceResult.length || !replaceResult[0].hasChanged) {
+    var emptyFile = true;
+    try {
+      var buffer = fs.readFileSync(outputPath);
+      emptyFile = !buffer.length;
+    } catch (e) {
+      /* empty */
+    }
+    fs.appendFileSync(outputPath, !emptyFile ? "\n\n".concat(commonResult) : commonResult);
+  }
+}
 
 var args = yargs(process.argv.slice(2)).options({
   f: {

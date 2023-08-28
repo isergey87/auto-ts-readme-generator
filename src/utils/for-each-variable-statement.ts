@@ -1,9 +1,11 @@
 import ts from 'typescript'
 export const forEachVariableStatement = (
   node: ts.VariableStatement,
-  callback: (node: ts.Node) => void,
+  callback: (node: ts.VariableDeclaration) => void,
 ) => {
-  ts.forEachChild(node, (childNode) => {
-    ts.forEachChild(childNode, callback)
+  ts.forEachChild(node.declarationList, (childNode) => {
+    if (ts.isVariableDeclaration(childNode)) {
+      callback(childNode)
+    }
   })
 }
