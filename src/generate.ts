@@ -7,8 +7,11 @@ import {getTsConfig} from './utils/get-ts-config'
 import {DocEntry, TsFileExportDocumentation} from './ts-file-export-documentation'
 
 const mdSpecial = /([\\`*_{}[\]()#+\-.!])/g
-const escapeMd = (src: string) => {
-  return src.replaceAll(mdSpecial, '\\$1')
+const escapeMd = (src: string | undefined) => {
+  if (src) {
+    return src.replaceAll(mdSpecial, '\\$1')
+  }
+  return ''
 }
 
 export const generate = (
@@ -41,13 +44,13 @@ export const generate = (
 function docEntryToMd(docEntry: DocEntry): string {
   let result = ''
   if (docEntry.name) {
-    result += `### ${docEntry.name}\n\n`
+    result += `### ${escapeMd(docEntry.name)}\n\n`
     if (docEntry.type) {
-      result += `type: ${docEntry.type}\n\n`
+      result += `type: ${escapeMd(docEntry.type)}\n\n`
     }
   }
   if (docEntry.documentation) {
-    result += `${docEntry.documentation}\n\n`
+    result += `${escapeMd(docEntry.documentation)}\n\n`
   }
   if (docEntry.constructors && docEntry.constructors.length) {
     result += generateTable('Constructors')
@@ -69,7 +72,7 @@ function docEntryToMd(docEntry: DocEntry): string {
       .join('\n')
   }
   if (docEntry.returnType) {
-    result += `#### Return\n\n${docEntry.returnType}`
+    result += `#### Return\n\n${escapeMd(docEntry.returnType)}`
   }
   return result
 }
@@ -79,7 +82,9 @@ function generateTable(name: string) {
 }
 
 function docEntryToTable(docEntry: DocEntry): string {
-  return `| **${docEntry.name}** | ${docEntry.type} | ${docEntry.documentation} |`
+  return `| **${escapeMd(docEntry.name)}** | ${escapeMd(docEntry.type)} | ${escapeMd(
+    docEntry.documentation,
+  )} |`
 }
 
 function writeToOutput(result: string, outputPath: string, section: string) {

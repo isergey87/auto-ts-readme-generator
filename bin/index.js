@@ -411,7 +411,10 @@ var TsFileExportDocumentation = /*#__PURE__*/function () {
 
 var mdSpecial = /([\\`*_{}[\]()#+\-.!])/g;
 var escapeMd = function escapeMd(src) {
-  return src.replaceAll(mdSpecial, '\\$1');
+  if (src) {
+    return src.replaceAll(mdSpecial, '\\$1');
+  }
+  return '';
 };
 var generate = function generate(files, configPath, outputPath, section) {
   try {
@@ -446,13 +449,13 @@ var generate = function generate(files, configPath, outputPath, section) {
 function docEntryToMd(docEntry) {
   var result = '';
   if (docEntry.name) {
-    result += "### ".concat(docEntry.name, "\n\n");
+    result += "### ".concat(escapeMd(docEntry.name), "\n\n");
     if (docEntry.type) {
-      result += "type: ".concat(docEntry.type, "\n\n");
+      result += "type: ".concat(escapeMd(docEntry.type), "\n\n");
     }
   }
   if (docEntry.documentation) {
-    result += "".concat(docEntry.documentation, "\n\n");
+    result += "".concat(escapeMd(docEntry.documentation), "\n\n");
   }
   if (docEntry.constructors && docEntry.constructors.length) {
     result += generateTable('Constructors');
@@ -476,7 +479,7 @@ function docEntryToMd(docEntry) {
     }).join('\n');
   }
   if (docEntry.returnType) {
-    result += "#### Return\n\n".concat(docEntry.returnType);
+    result += "#### Return\n\n".concat(escapeMd(docEntry.returnType));
   }
   return result;
 }
@@ -484,7 +487,7 @@ function generateTable(name) {
   return "#### ".concat(name, ":\n\n| name  |  type  | description |\n|-------|------|-------------|\n");
 }
 function docEntryToTable(docEntry) {
-  return "| **".concat(docEntry.name, "** | ").concat(docEntry.type, " | ").concat(docEntry.documentation, " |");
+  return "| **".concat(escapeMd(docEntry.name), "** | ").concat(escapeMd(docEntry.type), " | ").concat(escapeMd(docEntry.documentation), " |");
 }
 function writeToOutput(result, outputPath, section) {
   var sectionName = "# ".concat(section);
