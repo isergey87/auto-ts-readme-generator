@@ -8,10 +8,10 @@ export default {
     dir: 'bin',
     banner: '#!/usr/bin/env node'
   },
-  external: [/^yargs/, 'typescript', 'fs', 'path'],
+  external: [/^yargs/, 'typescript', 'fs', 'path', 'glob'],
   plugins: [
     typescript({
-      exclude: '**/__tests__/**/*',
+      exclude: ['**/__tests__/**/*'],
     }),
     babel({
       extensions: ['.js', '.jsx', '.ts', '.tsx'],

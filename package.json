@@ -1,6 +1,6 @@
 {
   "name": "auto-ts-readme-generator",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "description": "tool to generate description for TypeScripts exports",
   "main": "./bin/index.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "lint": "eslint --ext .js,.ts,.tsx ./src",
     "lint:fix": "eslint --ext .js,.ts,.tsx ./src --fix",
     "test": "jest --passWithNoTests",
-    "custom:publish": "npm run lint && npm run circular && yarn run test && npm version && npm run build && npm publish",
+    "custom:publish": "npm run lint && npm run circular && yarn run test && npm run build && npm publish",
     "version": "git add -A ./src",
     "postversion": "git push && git push --tags"
   },
@@ -91,7 +91,6 @@
   },
   "dependencies": {
     "glob": "^10.3.3",
-    "replace-in-file": "^7.0.1",
     "yargs": "^17.7.2"
   },
   "jest": {

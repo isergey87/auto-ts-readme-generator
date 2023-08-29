@@ -5,7 +5,6 @@ var yargs = require('yargs/yargs');
 var fs = require('fs');
 var path = require('path');
 var glob = require('glob');
-var replaceInFile = require('replace-in-file');
 var ts = require('typescript');
 
 function _classCallCheck(instance, Constructor) {
@@ -410,10 +409,18 @@ var TsFileExportDocumentation = /*#__PURE__*/function () {
   return TsFileExportDocumentation;
 }();
 
-var mdSpecial = /([\\`*_{}[\]#+\-.!|])/g;
-var escapeMd = function escapeMd(src) {
+var mdUnderDash = /_([^_]+)_/g;
+var commonsMdSymbols = /([\\`*#+\-!])/g;
+var tableMdSymbols = /([\\`*#+\-!|])/g;
+var commonEscapeMd = function commonEscapeMd(src) {
   if (src) {
-    return src.replaceAll(mdSpecial, '\\$1');
+    return src.replaceAll(commonsMdSymbols, '\\$1').replaceAll(mdUnderDash, '\\_$1\\_');
+  }
+  return '';
+};
+var tableEscapeMd = function tableEscapeMd(src) {
+  if (src) {
+    return src.replaceAll(tableMdSymbols, '\\$1');
   }
   return '';
 };
@@ -429,7 +436,7 @@ var generate = function generate(files, configPath, outputPath, section) {
     try {
       for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var file = _step.value;
-        var link = escapeMd(path.relative('.', file));
+        var link = commonEscapeMd(path.relative('.', file));
         var tsFileExport = new TsFileExportDocumentation(file, config);
         var documentations = tsFileExport.extractDocumentation();
         if (documentations.length) {
@@ -453,13 +460,13 @@ var generate = function generate(files, configPath, outputPath, section) {
 function docEntryToMd(docEntry) {
   var result = '';
   if (docEntry.name) {
-    result += "### ".concat(escapeMd(docEntry.name), "\n\n");
+    result += "### ".concat(commonEscapeMd(docEntry.name), "\n\n");
     if (docEntry.type) {
-      result += "type: ".concat(escapeMd(docEntry.type), "\n\n");
+      result += "type: ".concat(commonEscapeMd(docEntry.type), "\n\n");
     }
   }
   if (docEntry.documentation) {
-    result += "".concat(escapeMd(docEntry.documentation), "\n\n");
+    result += "".concat(commonEscapeMd(docEntry.documentation), "\n\n");
   }
   if (docEntry.constructors && docEntry.constructors.length) {
     result += generateTable('Constructors');
@@ -486,7 +493,7 @@ function docEntryToMd(docEntry) {
     result += '\n\n';
   }
   if (docEntry.returnType) {
-    result += "#### Return\n\n".concat(escapeMd(docEntry.returnType));
+    result += "#### Return\n\n".concat(commonEscapeMd(docEntry.returnType));
   }
   return result;
 }
@@ -494,7 +501,7 @@ function generateTable(name) {
   return "#### ".concat(name, ":\n\n| name  |  type  | description |\n|-------|------|-------------|\n");
 }
 function docEntryToTable(docEntry) {
-  return "| **".concat(escapeMd(docEntry.name), "** | ").concat(escapeMd(docEntry.type), " | ").concat(escapeMd(docEntry.documentation), " |");
+  return "| **".concat(tableEscapeMd(docEntry.name), "** | ").concat(tableEscapeMd(docEntry.type), " | ").concat(tableEscapeMd(docEntry.documentation), " |");
 }
 function writeToOutput(result, outputPath, section) {
   if (!result) {
@@ -502,27 +509,22 @@ function writeToOutput(result, outputPath, section) {
   }
   var sectionName = "# ".concat(section);
   var commonResult = "".concat(sectionName, "\n").concat(result, "\n\n");
-  var regexp = new RegExp("(# ".concat(section, ".*# )|(# ").concat(section, ".*$)"), 'gs');
-  var replaceResult = replaceInFile.replaceInFileSync({
-    files: outputPath,
-    from: regexp,
-    to: function to(str) {
-      if (str.endsWith('# ')) {
-        return "".concat(commonResult, "\n# ");
-      } else {
-        return commonResult;
-      }
+  var regexp = new RegExp("(# ".concat(section, ".*[^#]# )|(# ").concat(section, ".*$)"), 'gs');
+  var content = '';
+  try {
+    content = fs.readFileSync(outputPath, 'utf8');
+  } catch (e) {
+    /* empty */
+  }
+  if (!content) {
+    fs.writeFileSync(outputPath, commonResult.trim());
+  } else {
+    if (regexp.test(content)) {
+      content = content.replaceAll(regexp, commonResult);
+    } else {
+      content += "\n\n".concat(commonResult);
     }
-  });
-  if (!replaceResult.length || !replaceResult[0].hasChanged) {
-    var emptyFile = true;
-    try {
-      var buffer = fs.readFileSync(outputPath);
-      emptyFile = !buffer.length;
-    } catch (e) {
-      /* empty */
-    }
-    fs.appendFileSync(outputPath, !emptyFile ? "\n\n".concat(commonResult) : commonResult);
+    fs.writeFileSync(outputPath, content.trim());
   }
 }
 

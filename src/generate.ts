@@ -2,15 +2,23 @@ import fs from 'fs'
 import path from 'path'
 
 import {globSync} from 'glob'
-import {replaceInFileSync} from 'replace-in-file'
 
 import {getTsConfig} from './utils/get-ts-config'
 import {DocEntry, TsFileExportDocumentation} from './ts-file-export-documentation'
 
-const mdSpecial = /([\\`*_{}[\]#+\-.!|])/g
-const escapeMd = (src: string | undefined) => {
+const mdUnderDash = /_([^_]+)_/g
+const commonsMdSymbols = /([\\`*#+\-!])/g
+const tableMdSymbols = /([\\`*#+\-!|])/g
+const commonEscapeMd = (src: string | undefined) => {
   if (src) {
-    return src.replaceAll(mdSpecial, '\\$1')
+    return src.replaceAll(commonsMdSymbols, '\\$1').replaceAll(mdUnderDash, '\\_$1\\_')
+  }
+  return ''
+}
+
+const tableEscapeMd = (src: string | undefined) => {
+  if (src) {
+    return src.replaceAll(tableMdSymbols, '\\$1')
   }
   return ''
 }
@@ -27,7 +35,7 @@ export const generate = (
     const listOfFiles = globSync(files.map((f) => f.toString()))
 
     for (const file of listOfFiles) {
-      const link = escapeMd(path.relative('.', file))
+      const link = commonEscapeMd(path.relative('.', file))
       const tsFileExport = new TsFileExportDocumentation(file, config)
       const documentations = tsFileExport.extractDocumentation()
       if (documentations.length) {
@@ -45,13 +53,13 @@ export const generate = (
 function docEntryToMd(docEntry: DocEntry): string {
   let result = ''
   if (docEntry.name) {
-    result += `### ${escapeMd(docEntry.name)}\n\n`
+    result += `### ${commonEscapeMd(docEntry.name)}\n\n`
     if (docEntry.type) {
-      result += `type: ${escapeMd(docEntry.type)}\n\n`
+      result += `type: ${commonEscapeMd(docEntry.type)}\n\n`
     }
   }
   if (docEntry.documentation) {
-    result += `${escapeMd(docEntry.documentation)}\n\n`
+    result += `${commonEscapeMd(docEntry.documentation)}\n\n`
   }
   if (docEntry.constructors && docEntry.constructors.length) {
     result += generateTable('Constructors')
@@ -76,7 +84,7 @@ function docEntryToMd(docEntry: DocEntry): string {
     result += '\n\n'
   }
   if (docEntry.returnType) {
-    result += `#### Return\n\n${escapeMd(docEntry.returnType)}`
+    result += `#### Return\n\n${commonEscapeMd(docEntry.returnType)}`
   }
   return result
 }
@@ -86,7 +94,7 @@ function generateTable(name: string) {
 }
 
 function docEntryToTable(docEntry: DocEntry): string {
-  return `| **${escapeMd(docEntry.name)}** | ${escapeMd(docEntry.type)} | ${escapeMd(
+  return `| **${tableEscapeMd(docEntry.name)}** | ${tableEscapeMd(docEntry.type)} | ${tableEscapeMd(
     docEntry.documentation,
   )} |`
 }
@@ -97,26 +105,21 @@ function writeToOutput(result: string, outputPath: string, section: string) {
   }
   const sectionName = `# ${section}`
   const commonResult = `${sectionName}\n${result}\n\n`
-  const regexp = new RegExp(`(# ${section}.*# )|(# ${section}.*$)`, 'gs')
-  const replaceResult = replaceInFileSync({
-    files: outputPath,
-    from: regexp,
-    to: (str) => {
-      if (str.endsWith('# ')) {
-        return `${commonResult}\n# `
-      } else {
-        return commonResult
-      }
-    },
-  })
-  if (!replaceResult.length || !replaceResult[0].hasChanged) {
-    let emptyFile = true
-    try {
-      const buffer = fs.readFileSync(outputPath)
-      emptyFile = !buffer.length
-    } catch (e) {
-      /* empty */
+  const regexp = new RegExp(`(# ${section}.*[^#]# )|(# ${section}.*$)`, 'gs')
+  let content = ''
+  try {
+    content = fs.readFileSync(outputPath, 'utf8')
+  } catch (e) {
+    /* empty */
+  }
+  if (!content) {
+    fs.writeFileSync(outputPath, commonResult.trim())
+  } else {
+    if (regexp.test(content)) {
+      content = content.replaceAll(regexp, commonResult)
+    } else {
+      content += `\n\n${commonResult}`
     }
-    fs.appendFileSync(outputPath, !emptyFile ? `\n\n${commonResult}` : commonResult)
+    fs.writeFileSync(outputPath, content.trim())
   }
 }
