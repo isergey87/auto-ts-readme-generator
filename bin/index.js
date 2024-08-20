@@ -166,7 +166,8 @@ var getTsConfig = function getTsConfig(configPath) {
     throw error;
   }
   parseModuleResolution(config === null || config === void 0 ? void 0 : config.compilerOptions);
-  return config === null || config === void 0 ? void 0 : config.compilerOptions;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ts.getParsedCommandLineOfConfigFile(configPath, undefined, ts.sys);
 };
 
 var forEachVariableStatement = function forEachVariableStatement(node, callback) {
@@ -437,7 +438,7 @@ var generate = function generate(files, configPath, outputPath, section) {
       for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var file = _step.value;
         var link = commonEscapeMd(path.relative('.', file));
-        var tsFileExport = new TsFileExportDocumentation(file, config);
+        var tsFileExport = new TsFileExportDocumentation(file, (config === null || config === void 0 ? void 0 : config.options) || {});
         var documentations = tsFileExport.extractDocumentation();
         if (documentations.length) {
           result += "[".concat(link, "](").concat(link, ")\n\n");

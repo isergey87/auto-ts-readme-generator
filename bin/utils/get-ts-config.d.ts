@@ -1,1 +1,2 @@
-export declare const getTsConfig: (configPath: string) => any;
+import ts from 'typescript';
+export declare const getTsConfig: (configPath: string) => ts.ParsedCommandLine | undefined;

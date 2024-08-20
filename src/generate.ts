@@ -36,7 +36,7 @@ export const generate = (
 
     for (const file of listOfFiles) {
       const link = commonEscapeMd(path.relative('.', file))
-      const tsFileExport = new TsFileExportDocumentation(file, config)
+      const tsFileExport = new TsFileExportDocumentation(file, config?.options || {})
       const documentations = tsFileExport.extractDocumentation()
       if (documentations.length) {
         result += `[${link}](${link})\n\n`
